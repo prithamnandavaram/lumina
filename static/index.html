@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumina | AI Talent Scout</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --accent: #3b82f6;
+            --text: #e2e8f0;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-image: radial-gradient(circle at top right, #1e293b, #0f172a);
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            padding: 2rem;
+        }
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+        }
+        h1 {
+            font-weight: 300;
+            letter-spacing: -1px;
+            margin-bottom: 2rem;
+            text-align: center;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        label { display: block; margin: 1rem 0 0.5rem; color: #94a3b8; font-size: 0.9rem; }
+        input, textarea {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            color: white;
+            font-family: inherit;
+        }
+        textarea { height: 120px; resize: vertical; }
+        button {
+            width: 100%;
+            margin-top: 2rem;
+            padding: 1rem;
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { background: #2563eb; transform: translateY(-2px); }
+        .result-box {
+            margin-top: 2rem;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 1.5rem;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            display: none;
+        }
+        .loader {
+            display: none;
+            text-align: center;
+            margin-top: 1rem;
+            color: #94a3b8;
+        }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        .file-input-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+        }
+        .file-input-btn {
+            border: 1px dashed rgba(255,255,255,0.2);
+            padding: 2rem;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Lumina</h1>
+            
+            <form id="scoutForm">
+                <label>Job Description</label>
+                <textarea id="jd" placeholder="Paste the job description here..." required></textarea>
+                
+                <label>Candidate Resumes (PDF)</label>
+                <div class="file-input-wrapper">
+                    <div class="file-input-btn">Click to upload PDFs</div>
+                    <input type="file" id="resumes" multiple accept=".pdf" required onchange="updateFileCount()">
+                </div>
+                <div id="fileCount" style="text-align: center; color: #60a5fa; margin-top: 0.5rem; font-size: 0.8rem;"></div>
+
+                <button type="submit" id="submitBtn">Start Scouting</button>
+            </form>
+
+            <div class="loader" id="loader">Lumina is analyzing candidates...</div>
+            <div class="result-box" id="resultBox"></div>
+        </div>
+    </div>
+
+    <script>
+        function updateFileCount() {
+            const count = document.getElementById('resumes').files.length;
+            document.getElementById('fileCount').textContent = `${count} files selected`;
+        }
+
+        document.getElementById('scoutForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const loader = document.getElementById('loader');
+            const resultBox = document.getElementById('resultBox');
+            
+            btn.disabled = true;
+            loader.style.display = 'block';
+            resultBox.style.display = 'none';
+            resultBox.textContent = '';
+
+            const formData = new FormData();
+            formData.append('job_description', document.getElementById('jd').value);
+            
+            const files = document.getElementById('resumes').files;
+            for (let i = 0; i < files.length; i++) {
+                formData.append('resumes', files[i]);
+            }
+
+            try {
+                // Upload
+                const uploadRes = await fetch('/upload', { method: 'POST', body: formData });
+                const uploadData = await uploadRes.json();
+                
+                if (uploadData.job_id) {
+                    pollResults(uploadData.job_id);
+                } else {
+                    alert('Upload failed');
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                btn.disabled = false;
+            }
+        });
+
+        async function pollResults(jobId) {
+            const poll = setInterval(async () => {
+                const res = await fetch(`/results/${jobId}`);
+                const data = await res.json();
+
+                if (data.status === 'finished') {
+                    clearInterval(poll);
+                    document.getElementById('loader').style.display = 'none';
+                    document.getElementById('resultBox').style.display = 'block';
+                    document.getElementById('resultBox').textContent = data.report;
+                    document.getElementById('submitBtn').disabled = false;
+                } else if (data.status === 'failed') {
+                    clearInterval(poll);
+                    alert('Analysis failed.');
+                    document.getElementById('submitBtn').disabled = false;
+                }
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

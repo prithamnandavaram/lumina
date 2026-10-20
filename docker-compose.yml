@@ -1,0 +1,12 @@
+services:
+  lumina-qdrant:
+    image: qdrant/qdrant
+    ports:
+      - 6334:6333 # Port mapped to 6334 to avoid conflict with other running qdrant instances
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+
+  lumina-redis:
+    image: redis/redis-stack
+    ports:
+      - 6380:6379 # Port mapped to 6380 to avoid conflict with other running redis instances
